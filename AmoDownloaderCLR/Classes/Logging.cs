@@ -7,13 +7,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace AmoCRMDownloader.Classes
+namespace AmoDownloaderCLR.Classes
 {
     class ConsoleLogging
     {
         public DateTime StartTime;
         public DateTime StopTime;
-        public int EventID;
+        //public int EventID;
 
         public ConsoleLogging(string mes, string EventName)
         {

@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace AmoCRMDownloader.Models
+namespace AmoDownloaderCLR.Models
 {
     public class Account
     {

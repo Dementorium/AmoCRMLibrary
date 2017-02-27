@@ -8,7 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 using AmoCRMDownloader.Models;
 using Newtonsoft.Json;
 
@@ -36,8 +36,8 @@ namespace AmoCRMDownloader.Classes
 
     public class AmoCRMProvider
     {
-        private string _accessToken;
-        private CookieCollection cookies;
+        public string _accessToken;
+        //private CookieCollection cookies;
         private bool _criticalError;
         public bool HadErrors { get; private set; }
         
@@ -61,23 +61,95 @@ namespace AmoCRMDownloader.Classes
             if (dict.response.auth)
             {
                 log.WriteInfo("Get success auth");
-                cookies = response.Cookies;
                 foreach (Cookie cookieValue in response.Cookies)
                 {
-                    if (cookieValue.ToString().Split('=')[0] == "session_id")
-                    {
-                        _accessToken = cookieValue.ToString().Split('=')[1];
-                        log.WriteInfo("Found session id in cookies");
-                    }
+                    log.WriteInfo(cookieValue.ToString());
                 }
+                _accessToken = response.Cookies["session_id"].Value;
                 /*Иногда куки могут быть только в request.CookieContainer)*/
             }
             return _accessToken;
         }
 
-        /*Создаем новую таску с параметрами*/
-        public void NewTask()
+
+        public TaskResponse SendNewTask(string sessionId, Task newTask)
         {
+            var log = new ConsoleLogging();
+            bool reRunFlag = false;
+            var responseText = "";
+
+            CookieCollection cookies = new CookieCollection();
+            cookies.Add(new Cookie(name: "session_id", value: sessionId, path: "/", domain: ".amocrm.ru"));
+            cookies.Add(new Cookie(name: "BITRIX_SM_LOGIN", value: "amotime%40yandex.ru", path: "/", domain: ".amocrm.ru"));
+            cookies.Add(new Cookie(name: "BITRIX_SM_SALE_UID", value: "0", path: "/", domain: ".amocrm.ru"));
+            cookies.Add(new Cookie(name: "user_lang", value: "ru", path: "/", domain: ".amocrm.ru"));
+
+            var url = Program.Host + "/private/api/v2/json/tasks/set";
+
+            string json = JsonConvert.SerializeObject(newTask);
+
+            //var query = new QueryDuration();
+            var body = Encoding.UTF8.GetBytes(json);
+            var charArray = Encoding.UTF8.GetString(body).ToCharArray();
+            do
+            {
+                if (reRunFlag)
+                {
+                    log.WriteInfo("Retry add new task..");
+                    //Console.WriteLine("Retry DeleteMarketoData..");
+                    reRunFlag = false;
+                }
+
+                var request = (HttpWebRequest)WebRequest.Create(url);
+                request.Method = "POST";
+                request.ContentType = "application/json";
+                request.CookieContainer = new CookieContainer();
+                request.CookieContainer.Add(cookies);
+                request.AllowAutoRedirect = false;
+                //request.Accept = "application/json";
+                request.ContentLength = charArray.Length;
+
+                using (var streamWriter = new StreamWriter(request.GetRequestStream()))
+                {
+                    streamWriter.Write(charArray, 0, charArray.Length);
+                    streamWriter.Close();
+                }
+
+                try
+                {
+                    var response = (HttpWebResponse)request.GetResponse();
+
+                    using (var reader = new StreamReader(response.GetResponseStream()))
+                    {
+                        responseText = reader.ReadToEnd();
+                        response.Close();
+                    }
+                    reRunFlag = false;
+                }
+                catch (Exception e)
+                {
+                    var error = "Add new task. " + e.HResult + ": " + e.Message;
+                    log.WriteInfo(error);
+                    reRunFlag = true;
+                    Thread.Sleep(2000);
+                }
+            } while (reRunFlag);
+
+            return JsonConvert.DeserializeObject<TaskResponse>(responseText);
+        }
+
+
+        /*Создаем новую таску с параметрами*/
+        public string[] NewTask(string sessionId)
+        {
+            string[] ids = new []{""}; 
+                //TODO
+            CookieCollection cookies = new CookieCollection();
+            cookies.Add(new Cookie(name: "session_id", value: sessionId, path: "/", domain: ".amocrm.ru"));
+            cookies.Add(new Cookie(name: "BITRIX_SM_LOGIN", value: "amotime%40yandex.ru", path: "/", domain: ".amocrm.ru"));
+            cookies.Add(new Cookie(name: "BITRIX_SM_SALE_UID", value: "0", path: "/", domain: ".amocrm.ru"));
+            cookies.Add(new Cookie(name: "user_lang", value: "ru", path: "/", domain: ".amocrm.ru"));
+
             var log = new ConsoleLogging();
             var url = Program.Host + "/private/api/v2/json/tasks/set";
             var request = (HttpWebRequest)WebRequest.Create(url);
@@ -97,6 +169,8 @@ namespace AmoCRMDownloader.Classes
             {
 
             }
+            return ids; 
+                //TODO
         }
 
         private void InsertIntoDB(DataTable dtToIns, string tableName)
